@@ -53,6 +53,9 @@ jobs:
       - name: Install Ollama
         run: |
           curl -fsSL https://ollama.com/install.sh | sh
+          sudo systemctl enable ollama
+          sudo systemctl start ollama
+          sleep 5
           ollama pull qwen2.5-coder:1.5b
           ollama pull phi
 
