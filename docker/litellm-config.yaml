@@ -3,6 +3,7 @@ model_list:
     litellm_params:
       model: ollama/qwen2.5-coder:1.5b
       api_base: http://ollama:11434
+      drop_params: true      # <--- ADD THIS
 
   - model_name: phi
     litellm_params:

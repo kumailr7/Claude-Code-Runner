@@ -50,18 +50,16 @@ jobs:
 
           echo "CODE_PASSWORD=$PASSWORD" >> $GITHUB_ENV
 
-      - name: Start Docker Services
+      - name: Install Ollama
         run: |
-          docker compose -f docker/docker-compose.yml up -d
+          curl -fsSL https://ollama.com/install.sh | sh
+          ollama pull qwen2.5-coder:1.5b
+          ollama pull phi
 
-      - name: Start Monitoring
-        run: docker compose -f docker/monitor-compose.yml up -d
-
-      - name: Pull Models
+      - name: Setup Claude Alias
         run: |
-          sleep 15
-          docker exec ollama ollama pull qwen2.5-coder:1.5b
-          docker exec ollama ollama pull phi
+          sudo -u devuser bash -c "echo \"alias cq='ollama launch claude --model qwen2.5-coder:1.5b'\" >> ~/.bashrc"
+          sudo -u devuser bash -c "source ~/.bashrc"
 
       - name: Install Claude CLI
         run: |
@@ -96,8 +94,8 @@ jobs:
           echo "Ollama API:"
           echo "http://$TAILSCALE_IP:11434"
           echo ""
-          echo "LiteLLM:"
-          echo "http://$TAILSCALE_IP:4000"
+          echo "Run Claude Code:"
+          echo "cq"
           echo "=============================="
 
       - name: Keep Alive
