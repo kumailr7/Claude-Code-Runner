@@ -37,16 +37,14 @@ jobs:
 
           PASSWORD=$(openssl rand -base64 12)
 
-          mkdir -p /home/devuser/.config/code-server
+          sudo -u devuser mkdir -p /home/devuser/.config/code-server
 
-          cat <<EOF > /home/devuser/.config/code-server/config.yaml
+          sudo -u devuser tee /home/devuser/.config/code-server/config.yaml <<EOF
           bind-addr: 0.0.0.0:8080
           auth: password
           password: $PASSWORD
           cert: false
           EOF
-
-          chown -R devuser:devuser /home/devuser/.config
 
           sudo -u devuser nohup code-server >/tmp/code-server.log 2>&1 &
 
