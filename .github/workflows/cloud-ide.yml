@@ -1,0 +1,105 @@
+name: Cloud IDE + Ollama + Tailscale
+
+on:
+  workflow_dispatch:
+
+jobs:
+  cloud-runner:
+    runs-on: ubuntu-latest
+    timeout-minutes: 360
+
+    steps:
+      - uses: actions/checkout@v4
+
+      - name: Create User + SSH
+        run: |
+          PASSWORD=$(tr -dc A-Za-z0-9 < /dev/urandom | head -c20)
+          echo "SSH_PASSWORD=$PASSWORD" >> $GITHUB_ENV
+
+          sudo useradd -m -s /bin/bash devuser
+          echo "devuser:$PASSWORD" | sudo chpasswd
+          sudo usermod -aG sudo,docker devuser
+
+          sudo apt update
+          sudo apt install -y openssh-server curl git docker.io npm
+          sudo systemctl enable ssh
+          sudo systemctl start ssh
+
+      - name: Install code-server
+        run: |
+          curl -fsSL https://code-server.dev/install.sh | sh
+
+          PASSWORD=$(openssl rand -base64 12)
+
+          mkdir -p /home/devuser/.config/code-server
+
+          cat <<EOF > /home/devuser/.config/code-server/config.yaml
+          bind-addr: 0.0.0.0:8080
+          auth: password
+          password: $PASSWORD
+          cert: false
+          EOF
+
+          chown -R devuser:devuser /home/devuser/.config
+
+          sudo -u devuser nohup code-server >/tmp/code-server.log 2>&1 &
+
+          echo "CODE_PASSWORD=$PASSWORD" >> $GITHUB_ENV
+
+      - name: Start Docker Services
+        run: |
+          docker compose -f docker/docker-compose.yml up -d
+
+      - name: Start Monitoring
+        run: docker compose -f docker/monitor-compose.yml up -d
+
+      - name: Pull Models
+        run: |
+          sleep 15
+          docker exec ollama ollama pull qwen2.5-coder:1.5b
+          docker exec ollama ollama pull phi
+
+      - name: Install Claude CLI
+        run: |
+          npm install -g @anthropic-ai/claude-code || true
+
+      - name: Install Tailscale
+        run: |
+          curl -fsSL https://tailscale.com/install.sh | sh
+
+      - name: Start Tailscale
+        run: |
+          sudo tailscale up \
+            --authkey=${{ secrets.TAILSCALE_AUTH_KEY }} \
+            --ssh \
+            --hostname=cloud-ide-${GITHUB_RUN_ID}
+
+          TS_IP=$(tailscale ip -4 | head -n1)
+          echo "TAILSCALE_IP=$TS_IP" >> $GITHUB_ENV
+
+      - name: Access Details
+        run: |
+          echo ""
+          echo "=============================="
+          echo "SSH: $TAILSCALE_IP"
+          echo "User: devuser"
+          echo "Pass: $SSH_PASSWORD"
+          echo ""
+          echo "VS Code:"
+          echo "http://$TAILSCALE_IP:8080"
+          echo "Pass: $CODE_PASSWORD"
+          echo ""
+          echo "Ollama API:"
+          echo "http://$TAILSCALE_IP:11434"
+          echo ""
+          echo "LiteLLM:"
+          echo "http://$TAILSCALE_IP:4000"
+          echo "=============================="
+
+      - name: Keep Alive
+        run: |
+          while true; do
+            echo "[$(date)] active"
+            sleep 60
+          done
+
